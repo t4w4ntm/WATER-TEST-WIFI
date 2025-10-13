@@ -378,17 +378,9 @@ function makeChart(ctx) {
   }); 
 }
 function updateChart(rows) { 
-  // ตรวจสอบว่าเป็นข้อมูลวันนี้หรือไม่เพื่อเลือกรูปแบบการแสดงผล
-  const isTodayData = isShowingTodayData();
-  
-  // ถ้าเป็นข้อมูลวันนี้ แสดงเวลา (HH:mm) แทนวันที่
-  // ถ้าไม่ใช่ แสดงวันที่ (DD/MM/YY) ตามปกติ
+  // แสดงเวลาในรูปแบบ HH:mm เสมอ
   const labels = rows.map(r => {
-    if (isTodayData) {
-      return dayjs(r.ts).format('HH:mm'); // แสดงเฉพาะเวลา
-    } else {
-      return dayjs(r.ts).format('DD/MM/YY'); // แสดงวันที่ตามปกติ
-    }
+    return dayjs(r.ts).format('HH:mm'); // แสดงเฉพาะเวลา HH:mm
   }).reverse();
   
   const timeLabels = rows.map(r => dayjs(r.ts).format('DD/MM/YYYY HH:mm:ss')).reverse(); 
