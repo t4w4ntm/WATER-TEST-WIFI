@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="th" data-theme="light">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Water Quality Monitor</title>
+
+  <!-- Favicon -->
+  <link rel="shortcut icon" type="image/x-icon" href="icon.ico">
+  <link rel="icon" type="image/x-icon" href="icon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="icon.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="icon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="icon.png">
+  <meta name="msapplication-TileImage" content="icon.png">
+
+  <!-- ฟอนต์ไทยอ่านง่าย -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <!-- ตั้งธีมจากค่าเดิมใน localStorage -->
+  <script>
+    (function () {
+      try {
+        const saved = localStorage.getItem('water-quality-theme') || 'light';
+        document.documentElement.setAttribute('data-theme', saved);
+      } catch { }
+    })();
+  </script>
+
+  <!-- Chart.js + dayjs -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    // Import the functions you need from the SDKs you need
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js';
+    import { getDatabase, ref, onValue, off } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js';
+
+    // Your web app's Firebase configuration
+    const firebaseConfig = {
+      databaseURL: "https://water-quality-f2dfd-default-rtdb.asia-southeast1.firebasedatabase.app"
+    };
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const database = getDatabase(app);
+
+    // Make Firebase available globally
+    window.firebase = { database, ref, onValue, off };
+  </script>
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="brand">
+        <strong style="font-size:18px;">💧 Water Quality Monitor</strong>
+        <span class="badge" id="updated">–</span>
+      </div>
+      <button class="hamburger" id="menuToggle" type="button" aria-label="เมนูด่วน" aria-expanded="false"
+        style="display:none;">
+        <span></span><span></span><span></span>
+      </button>
+      <div class="tools" id="quickTools" style="gap:8px; flex-wrap:wrap;">
+        <div class="quick" role="group" aria-label="ช่วงเวลาแบบด่วน" style="display:flex; gap:4px; align-items:center;">
+          <button class="chip" id="rangeAll" aria-pressed="false" type="button">ทุกวัน</button>
+          <button class="chip" id="rangeToday" aria-pressed="false" type="button">วันนี้</button>
+          <button class="chip" id="range7" aria-pressed="false" type="button">7 วัน</button>
+          <button class="chip" id="range30" aria-pressed="false" type="button">30 วัน</button>
+          <button class="chip export" id="exportCsvBtn" type="button" title="ส่งออกเป็น CSV">Export</button>
+          <button class="chip mobile-theme-toggle" id="themeToggleMobile" type="button" aria-label="สลับธีม"
+            style="display:none;">สลับธีม</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filters (ไม่ sticky แล้ว) -->
+    <div class="filters" role="region" aria-label="ตัวกรองข้อมูล">
+      <div class="grid cols-4">
+        <div class="field" data-click-focus>
+          <span class="label">Device</span>
+          <select id="deviceFilter" aria-label="เลือกอุปกรณ์"></select>
+        </div>
+        <div class="field" data-click-focus>
+          <span class="label">Points (ตัดจำนวนจุดบนกราฟ)</span>
+          <select id="pointFilter">
+            <option value="50">ล่าสุด 50 จุด</option>
+            <option value="100" selected>ล่าสุด 100 จุด</option>
+            <option value="200">ล่าสุด 200 จุด</option>
+          </select>
+        </div>
+        <div class="field" data-click-focus>
+          <span class="label">วันที่เริ่มต้น</span>
+          <input type="date" id="startDateFilter" placeholder="ทุกวัน">
+        </div>
+        <div class="field" data-click-focus>
+          <span class="label">วันที่สิ้นสุด</span>
+          <input type="date" id="endDateFilter" placeholder="ทุกวัน">
+        </div>
+      </div>
+
+      <!-- แถวช่วงด่วน + ส่งออก ถูกย้ายไปที่ header -->
+    </div>
+
+    <!-- KPIs -->
+    <div class="section">
+      <h2>Water Quality Parameters</h2>
+      <small style="color:var(--muted); font-style:italic;">Demo Version: แสดงเฉพาะค่า EC และ TDS ค่าอื่นเป็น 0</small>
+      <div class="rule"></div>
+    </div>
+    <div class="kpis">
+      <!-- Row 1: pH | EC -->
+      <div class="card kpi">
+        <div class="name">pH</div>
+        <div class="val" id="ph">–</div>
+      </div>
+      <div class="card kpi">
+        <div class="name">EC (µS/cm)</div>
+        <div class="val" id="ec">–</div>
+      </div>
+      <!-- Row 2: DO | ORP -->
+      <div class="card kpi">
+        <div class="name">DO (mg/L)</div>
+        <div class="val" id="do">–</div>
+      </div>
+      <div class="card kpi">
+        <div class="name">ORP (mV)</div>
+        <div class="val" id="orp">–</div>
+      </div>
+      <!-- Row 3: Turbidity | TDS -->
+      <div class="card kpi">
+        <div class="name">Turbidity (NTU)</div>
+        <div class="val" id="turbidity">–</div>
+      </div>
+      <div class="card kpi">
+        <div class="name">TDS (ppm)</div>
+        <div class="val" id="tds">–</div>
+      </div>
+      <!-- Row 4: Temp | Signal -->
+      <div class="card kpi">
+        <div class="name">Temp (°C)</div>
+        <div class="val" id="temp">–</div>
+      </div>
+      <div class="card kpi">
+        <div class="name">Signal</div>
+        <div class="val" style="font-size:18px;"><span id="rssi">–</span> / <span id="snr">–</span></div>
+        <div class="name" id="dev">–</div>
+      </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="section" style="margin-top:18px;">
+      <h2>Live Chart</h2>
+      <div class="rule"></div>
+    </div>
+    <div class="panel"><canvas id="chart"></canvas></div>
+
+    <!-- Summary -->
+    <div class="section">
+      <h2>Summary (Avg / Min / Max)</h2>
+      <div class="rule"></div>
+    </div>
+    <div class="summary" id="summaryGrid"></div>
+
+    <!-- Table -->
+    <div class="section">
+      <h2>Recent Uplinks</h2>
+      <div class="rule"></div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="min-width:150px;">Time</th>
+            <th>Device</th>
+            <th>pH</th>
+            <th>EC (µS/cm)</th>
+            <th>DO (mg/L)</th>
+            <th>ORP (mV)</th>
+            <th>Turbidity (NTU)</th>
+            <th>TDS (ppm)</th>
+            <th>Temp (°C)</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Toast stack + live region for filter feedback -->
+  <div id="toastStack" aria-live="polite" aria-atomic="true"></div>
+  <div id="filterAnnouncer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- Export Modal -->
+  <div id="exportModal"
+    style="position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.4);">
+    <div class="card" role="dialog" aria-modal="true" aria-labelledby="exportTitle" style="width:min(520px,92vw);">
+      <h3 id="exportTitle" style="margin:6px 0 10px;">Export CSV</h3>
+      <div class="grid cols-2" style="margin-bottom:16px;">
+        <div class="field" style="grid-column:1/-1;">
+          <span class="label">Device</span>
+          <select id="exportDevice">
+            <option value="">ทั้งหมด</option>
+          </select>
+        </div>
+        <div class="field">
+          <span class="label">เริ่ม (รวม)</span>
+          <input type="datetime-local" id="exportStart">
+        </div>
+        <div class="field">
+          <span class="label">สิ้นสุด (รวม)</span>
+          <input type="datetime-local" id="exportEnd">
+        </div>
+      </div>
+      <div class="grid cols-2" style="gap:12px; margin-top:16px;">
+        <button class="btn secondary" id="exportCancel" type="button"
+          style="background:white; color:#333; border:1px solid #ccc;">ยกเลิก</button>
+        <button class="btn" id="exportConfirm" type="button"
+          style="background:#22c55e; color:white; border:none;">Export</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Theme Toggle -->
+  <button class="floating-toggle" id="themeToggle" type="button" title="สลับโหมดขาว/ดำ">
+    <span class="icon-sun" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="5" />
+        <line x1="12" y1="1" x2="12" y2="3" />
+        <line x1="12" y1="21" x2="12" y2="23" />
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+        <line x1="1" y1="12" x2="3" y2="12" />
+        <line x1="21" y1="12" x2="23" y2="12" />
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+      </svg>
+    </span>
+    <span class="icon-moon" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 12.79A9 9 0 0 1 11.21 3 7 7 0 1 0 21 12.79z" />
+      </svg>
+    </span>
+  </button>
+
+  <script src="app.js"></script>
+</body>
+
+</html>
