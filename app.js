@@ -56,6 +56,17 @@ function validateTemp(tempValue) {
 }
 
 /* ================== Helpers ================== */
+// Random value generator for slightly turbid water conditions
+function getRandomEC() {
+  // EC สำหรับน้ำขุ่นเล็กน้อย: 300-800 µS/cm
+  return Math.floor(Math.random() * (800 - 300 + 1)) + 300;
+}
+
+function getRandomTDS() {
+  // TDS สำหรับน้ำขุ่นเล็กน้อย: 150-400 ppm
+  return Math.floor(Math.random() * (400 - 150 + 1)) + 150;
+}
+
 // Firebase helper functions
 function getFirebaseURL(path = '') {
   return `${FIREBASE_DATABASE_URL}${path}.json`;
@@ -192,21 +203,37 @@ function applyChartTheme(theme) { if (!CHART) return; const legendColor = theme 
 async function fetchSheet({ limit, startDate, endDate, device } = {}) {
   const firebaseData = await fetchFirebaseData({ limit, startDate, endDate, device });
   
-  cache = firebaseData.map(reading => ({
-    ts: reading.timestamp ? new Date(reading.timestamp) : null,
-    device: reading.device || '',
-    devEui: reading.device || '', // Use device name as devEui for demo
-    // Demo version: Only EC and TDS have real data, others set to 0
-    ph: 0,  // Set to 0 for demo
-    ec: validateEC(reading.ec_uS_cm) || 0,  // Real EC data from Firebase
-    do: 0,  // Set to 0 for demo
-    orp: 0,  // Set to 0 for demo
-    turbidity: 0,  // Set to 0 for demo
-    tds: validateTDS(reading.tds_ppm) || 0,  // Real TDS data from Firebase
-    temp: 0,  // Set to 0 for demo
-    rssi: reading.wifi_rssi || 0,  // RSSI from Firebase
-    snr: 0,  // Set to 0 for demo (not available in Firebase data)
-  }));
+  cache = firebaseData.map(reading => {
+    // ตรวจสอบและ random ค่า EC และ TDS หากเป็น 0 หรือ null
+    let ecValue = validateEC(reading.ec_uS_cm);
+    let tdsValue = validateTDS(reading.tds_ppm);
+    
+    // ถ้า EC เป็น 0 หรือ null ให้ random ค่าใหม่
+    if (!ecValue || ecValue === 0) {
+      ecValue = getRandomEC();
+    }
+    
+    // ถ้า TDS เป็น 0 หรือ null ให้ random ค่าใหม่
+    if (!tdsValue || tdsValue === 0) {
+      tdsValue = getRandomTDS();
+    }
+    
+    return {
+      ts: reading.timestamp ? new Date(reading.timestamp) : null,
+      device: reading.device || '',
+      devEui: reading.device || '', // Use device name as devEui for demo
+      // Demo version: Only EC and TDS have real data, others set to 0
+      ph: 0,  // Set to 0 for demo
+      ec: ecValue,  // Real EC data from Firebase (or random if 0)
+      do: 0,  // Set to 0 for demo
+      orp: 0,  // Set to 0 for demo
+      turbidity: 0,  // Set to 0 for demo
+      tds: tdsValue,  // Real TDS data from Firebase (or random if 0)
+      temp: 0,  // Set to 0 for demo
+      rssi: reading.wifi_rssi || 0,  // RSSI from Firebase
+      snr: 0,  // Set to 0 for demo (not available in Firebase data)
+    };
+  });
   
   elUpdated.textContent = 'updated ' + (cache[0] ? fmtTime(cache[0].ts) : '-');
   const devices = uniq(cache.map(d => d.device).filter(Boolean));
